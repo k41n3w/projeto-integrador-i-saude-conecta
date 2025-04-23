@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,21 +20,30 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Clock, MapPin, Plus, Building, Phone, Mail, User } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { supabase, supabaseDb } from "@/lib/supabase"
+import { getProviderServices, createService } from "@/lib/services"
+import { toast } from "@/components/ui/use-toast"
 
 export default function ProviderProfilePage() {
+  const { user } = useAuth()
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+
   const [profileData, setProfileData] = useState({
-    organizationName: "Clínica Comunitária de Saúde",
-    contactName: "Dr. Carlos Silva",
-    email: "contato@clinicacomunitaria.org",
-    phone: "(11) 3456-7890",
-    address: "Rua Principal, 123",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "01001-000",
-    specialty: "Clínica Geral",
-    website: "www.clinicacomunitaria.org",
-    description:
-      "A Clínica Comunitária de Saúde oferece atendimento médico gratuito para a comunidade local. Nossa equipe de profissionais dedicados está comprometida em fornecer cuidados de saúde de qualidade para todos.",
+    organizationName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    specialty: "",
+    website: "",
+    description: "",
   })
 
   const [newService, setNewService] = useState({
@@ -47,24 +56,79 @@ export default function ProviderProfilePage() {
     slots: [{ date: "", time: "", duration: "30", cost: "" }],
   })
 
-  const [services, setServices] = useState([
-    {
-      id: 1,
-      name: "Consulta Geral",
-      specialty: "Clínica Geral",
-      duration: "30 min",
-      cost: "Gratuito",
-      availableSlots: 4,
-    },
-    {
-      id: 2,
-      name: "Exames Básicos",
-      specialty: "Clínica Geral",
-      duration: "45 min",
-      cost: "Gratuito",
-      availableSlots: 2,
-    },
-  ])
+  const [services, setServices] = useState<any[]>([])
+
+  // Carregar dados do perfil e serviços
+  useEffect(() => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const loadProfileData = async () => {
+      setIsLoading(true)
+      try {
+        // Buscar dados do perfil usando supabaseDb (schema saude_conecta)
+        const { data: profile, error } = await supabaseDb.from("profiles").select("*").eq("id", user.id).single()
+
+        if (error) {
+          console.error("Erro ao buscar perfil:", error)
+          // Se falhar no schema saude_conecta, tente no schema public
+          const { data: publicProfile, error: publicError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single()
+
+          if (publicError) {
+            console.error("Erro ao buscar perfil no schema public:", publicError)
+          } else if (publicProfile) {
+            setProfileData({
+              organizationName: publicProfile.organization_name || "",
+              contactName: publicProfile.name || "",
+              email: user.email,
+              phone: publicProfile.phone || "",
+              address: publicProfile.address || "",
+              city: publicProfile.city || "",
+              state: publicProfile.state || "",
+              zipCode: publicProfile.zip_code || "",
+              specialty: publicProfile.specialty || "",
+              website: publicProfile.website || "",
+              description: publicProfile.description || "",
+            })
+          }
+        } else if (profile) {
+          setProfileData({
+            organizationName: profile.organization_name || "",
+            contactName: profile.name || "",
+            email: user.email,
+            phone: profile.phone || "",
+            address: profile.address || "",
+            city: profile.city || "",
+            state: profile.state || "",
+            zipCode: profile.zip_code || "",
+            specialty: profile.specialty || "",
+            website: profile.website || "",
+            description: profile.description || "",
+          })
+        }
+
+        // Buscar serviços do provedor
+        try {
+          const providerServices = await getProviderServices(user.id)
+          setServices(providerServices)
+        } catch (serviceError) {
+          console.error("Erro ao carregar serviços:", serviceError)
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadProfileData()
+  }, [user, router])
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -102,44 +166,135 @@ export default function ProviderProfilePage() {
     })
   }
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Dados do perfil atualizados:", profileData)
-    // Em um app real, isso atualizaria o perfil no banco de dados
-    alert("Perfil atualizado com sucesso!")
+    setIsSaving(true)
+
+    try {
+      console.log("Atualizando perfil com dados:", {
+        organization_name: profileData.organizationName,
+        name: profileData.contactName,
+        phone: profileData.phone,
+        address: profileData.address,
+        city: profileData.city,
+        state: profileData.state,
+        zip_code: profileData.zipCode,
+        specialty: profileData.specialty,
+        website: profileData.website,
+        description: profileData.description,
+      })
+
+      // Usar supabaseDb para atualizar o perfil no schema saude_conecta
+      const { error } = await supabaseDb
+        .from("profiles")
+        .update({
+          organization_name: profileData.organizationName,
+          name: profileData.contactName,
+          phone: profileData.phone,
+          address: profileData.address,
+          city: profileData.city,
+          state: profileData.state,
+          zip_code: profileData.zipCode,
+          specialty: profileData.specialty,
+          website: profileData.website,
+          description: profileData.description,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+
+      if (error) {
+        console.error("Erro ao atualizar perfil:", error)
+        throw error
+      }
+
+      toast({
+        title: "Perfil atualizado",
+        description: "Suas informações foram atualizadas com sucesso.",
+      })
+    } catch (error) {
+      console.error("Erro ao atualizar perfil:", error)
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao atualizar o perfil.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleServiceSubmit = (e: React.FormEvent) => {
+  const handleServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Novo atendimento:", newService)
-    // Em um app real, isso adicionaria o serviço ao banco de dados
+    setIsSaving(true)
 
-    // Adicionar o serviço à lista local
-    setServices((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
+    try {
+      if (!user) throw new Error("Usuário não autenticado")
+
+      const serviceData = {
+        provider_id: user.id,
         name: newService.name,
+        description: newService.description,
         specialty: newService.specialty,
-        duration: `${newService.duration} min`,
+        duration: Number.parseInt(newService.duration),
         cost: newService.cost || "Gratuito",
-        availableSlots: newService.slots.length,
-      },
-    ])
+        requirements: newService.requirements,
+      }
 
-    // Resetar o formulário
-    setNewService({
-      name: "",
-      description: "",
-      specialty: "",
-      duration: "30",
-      cost: "",
-      requirements: "",
-      slots: [{ date: "", time: "", duration: "30", cost: "" }],
-    })
+      const slots = newService.slots.map((slot) => ({
+        date: slot.date,
+        time: slot.time,
+        duration: Number.parseInt(slot.duration),
+        cost: slot.cost || serviceData.cost,
+      }))
 
-    // Fechar o diálogo (em um app real, isso seria feito com um estado)
-    document.body.click() // Hack para fechar o diálogo
+      const { error, service } = await createService(serviceData, slots)
+
+      if (error) {
+        throw error
+      }
+
+      // Atualizar a lista de serviços
+      const updatedServices = await getProviderServices(user.id)
+      setServices(updatedServices)
+
+      // Resetar o formulário
+      setNewService({
+        name: "",
+        description: "",
+        specialty: "",
+        duration: "30",
+        cost: "",
+        requirements: "",
+        slots: [{ date: "", time: "", duration: "30", cost: "" }],
+      })
+
+      setDialogOpen(false)
+
+      toast({
+        title: "Serviço adicionado",
+        description: "O serviço foi adicionado com sucesso.",
+      })
+    } catch (error) {
+      console.error("Erro ao adicionar serviço:", error)
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao adicionar o serviço.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando perfil do profissional...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -205,6 +360,7 @@ export default function ProviderProfilePage() {
                         value={profileData.email}
                         onChange={handleProfileChange}
                         className="rounded-l-none"
+                        disabled
                       />
                     </div>
                   </div>
@@ -283,7 +439,9 @@ export default function ProviderProfilePage() {
                   />
                 </div>
 
-                <Button type="submit">Salvar Perfil</Button>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? "Salvando..." : "Salvar Perfil"}
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -294,7 +452,7 @@ export default function ProviderProfilePage() {
                 <CardTitle>Serviços de Atendimento</CardTitle>
                 <CardDescription>Gerencie os serviços que você oferece</CardDescription>
               </div>
-              <Dialog>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />
@@ -458,7 +616,9 @@ export default function ProviderProfilePage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type="submit">Salvar Atendimento</Button>
+                      <Button type="submit" disabled={isSaving}>
+                        {isSaving ? "Salvando..." : "Salvar Atendimento"}
+                      </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -473,14 +633,14 @@ export default function ProviderProfilePage() {
                         <h3 className="font-medium">{service.name}</h3>
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
-                          <span>{service.duration}</span>
+                          <span>{service.duration} min</span>
                           <span className="mx-2">•</span>
                           <span>{service.specialty}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-sm">
-                          <span className="font-medium">{service.availableSlots}</span> horários disponíveis
+                          <span className="font-medium">{service.slots?.length || 0}</span> horários disponíveis
                         </div>
                         <div
                           className={`px-2 py-1 rounded-full text-sm ${service.cost === "Gratuito" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary-foreground"}`}
@@ -504,7 +664,6 @@ export default function ProviderProfilePage() {
                         Adicionar Seu Primeiro Atendimento
                       </Button>
                     </DialogTrigger>
-                    {/* Conteúdo do diálogo já definido acima */}
                   </Dialog>
                 </div>
               )}
@@ -553,47 +712,19 @@ export default function ProviderProfilePage() {
 
               <div>
                 <h4 className="font-medium mb-2">Serviços Oferecidos</h4>
-                <ul className="space-y-1">
-                  {services.map((service) => (
-                    <li key={service.id} className="text-sm flex items-center">
-                      <span className="text-primary mr-2">•</span>
-                      <span>{service.name}</span>
-                    </li>
-                  ))}
-                </ul>
+                {services.length > 0 ? (
+                  <ul className="space-y-1">
+                    {services.map((service) => (
+                      <li key={service.id} className="text-sm flex items-center">
+                        <span className="text-primary mr-2">•</span>
+                        <span>{service.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado</p>
+                )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Dicas para Completar seu Perfil</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                <li className="flex items-start">
-                  <span className="text-primary mr-2">1.</span>
-                  <span className="text-sm">
-                    Preencha todas as informações de contato para facilitar o acesso dos pacientes.
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-primary mr-2">2.</span>
-                  <span className="text-sm">
-                    Adicione uma descrição detalhada sobre seus serviços e especialidades.
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-primary mr-2">3.</span>
-                  <span className="text-sm">
-                    Ofereça diversos horários de atendimento para aumentar a disponibilidade.
-                  </span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-primary mr-2">4.</span>
-                  <span className="text-sm">Mantenha seu perfil atualizado com novos serviços e horários.</span>
-                </li>
-              </ul>
             </CardContent>
           </Card>
         </div>

@@ -14,16 +14,9 @@ import { useAuth } from "@/contexts/auth-context"
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const { register } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-
-  const [patientData, setPatientData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  })
 
   const [providerData, setProviderData] = useState({
     organizationName: "",
@@ -33,37 +26,12 @@ export default function RegisterPage() {
     confirmPassword: "",
   })
 
-  const handlePatientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setPatientData((prev) => ({ ...prev, [name]: value }))
-  }
-
   const handleProviderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setProviderData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handlePatientSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-
-    if (patientData.password !== patientData.confirmPassword) {
-      setError("As senhas não coincidem")
-      return
-    }
-
-    // Simulando registro
-    login({
-      id: "patient" + Date.now(),
-      name: `${patientData.firstName} ${patientData.lastName}`,
-      email: patientData.email,
-      type: "patient",
-    })
-
-    router.push("/patient/dashboard")
-  }
-
-  const handleProviderSubmit = (e: React.FormEvent) => {
+  const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -72,18 +40,28 @@ export default function RegisterPage() {
       return
     }
 
-    // Simulando registro
-    const userId = "1" // Simulando um ID gerado
+    setIsLoading(true)
 
-    login({
-      id: userId,
-      name: providerData.contactName,
-      email: providerData.email,
-      type: "provider",
-    })
+    try {
+      const { error: registerError } = await register(providerData.email, providerData.password, {
+        name: providerData.contactName,
+        type: "provider",
+        organization_name: providerData.organizationName,
+      })
 
-    // Redirecionar para a página de perfil do profissional
-    router.push(`/providers/${userId}/profile`)
+      if (registerError) {
+        setError(registerError.message || "Erro ao criar conta")
+        return
+      }
+
+      // Redirecionar para a página de perfil do profissional
+      router.push(`/providers/profile`)
+    } catch (err: any) {
+      setError("Ocorreu um erro ao criar a conta: " + (err.message || "Erro desconhecido"))
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -109,69 +87,6 @@ export default function RegisterPage() {
               </TabsTrigger>
               <TabsTrigger value="provider">Profissional</TabsTrigger>
             </TabsList>
-            <TabsContent value="patient">
-              <form onSubmit={handlePatientSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Nome</Label>
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      required
-                      value={patientData.firstName}
-                      onChange={handlePatientChange}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Sobrenome</Label>
-                    <Input
-                      id="lastName"
-                      name="lastName"
-                      required
-                      value={patientData.lastName}
-                      onChange={handlePatientChange}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="patient-email">Email</Label>
-                  <Input
-                    id="patient-email"
-                    name="email"
-                    type="email"
-                    required
-                    value={patientData.email}
-                    onChange={handlePatientChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="patient-password">Senha</Label>
-                  <Input
-                    id="patient-password"
-                    name="password"
-                    type="password"
-                    required
-                    value={patientData.password}
-                    onChange={handlePatientChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="patient-confirm-password">Confirmar Senha</Label>
-                  <Input
-                    id="patient-confirm-password"
-                    name="confirmPassword"
-                    type="password"
-                    required
-                    value={patientData.confirmPassword}
-                    onChange={handlePatientChange}
-                  />
-                </div>
-                {error && <p className="text-sm text-red-500">{error}</p>}
-                <Button type="submit" className="w-full">
-                  Criar Conta de Paciente
-                </Button>
-              </form>
-            </TabsContent>
             <TabsContent value="provider">
               <form onSubmit={handleProviderSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -228,8 +143,8 @@ export default function RegisterPage() {
                   />
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
-                <Button type="submit" className="w-full">
-                  Criar Conta de Profissional
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Criando conta..." : "Criar Conta de Profissional"}
                 </Button>
               </form>
             </TabsContent>

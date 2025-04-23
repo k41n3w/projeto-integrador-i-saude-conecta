@@ -1,10 +1,8 @@
 "use client"
-
-import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Calendar, User, LogOut, ChevronDown } from "lucide-react"
+import { Calendar, User, LogOut, ChevronDown, Database } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import {
   DropdownMenu,
@@ -16,14 +14,16 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export default function Navbar() {
-  const { user, logout } = useAuth()
+  const { user, logout, isLoading } = useAuth()
   const router = useRouter()
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push("/")
   }
+
+  // Verificar se o usuário é administrador (para fins de demonstração, usamos o email)
+  const isAdmin = user?.email === "admin@example.com"
 
   return (
     <header className="border-b w-full">
@@ -47,7 +47,9 @@ export default function Navbar() {
           </Link>
         </nav>
         <div className="flex items-center gap-4">
-          {user ? (
+          {isLoading ? (
+            <div className="h-9 w-20 bg-muted animate-pulse rounded-md"></div>
+          ) : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="flex items-center gap-2">
@@ -60,14 +62,24 @@ export default function Navbar() {
                 <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href={user.type === "provider" ? `/providers/${user.id}/profile` : "/patient/dashboard"}>
-                    Meu Perfil
-                  </Link>
+                  <Link href={user.type === "provider" ? `/providers/profile` : "/patient/dashboard"}>Meu Perfil</Link>
                 </DropdownMenuItem>
                 {user.type === "provider" && (
                   <DropdownMenuItem asChild>
-                    <Link href={`/providers/${user.id}/profile`}>Gerenciar Serviços</Link>
+                    <Link href="/providers/profile">Gerenciar Serviços</Link>
                   </DropdownMenuItem>
+                )}
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Administração</DropdownMenuLabel>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/database">
+                        <Database className="h-4 w-4 mr-2" />
+                        Configurar Banco de Dados
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-500 cursor-pointer">
