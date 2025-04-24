@@ -17,9 +17,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Clock, MapPin, Plus, Building, Phone, Mail, User } from "lucide-react"
+import { Clock, MapPin, Plus, Building, Phone, Mail, User, CheckCircle2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase, supabaseDb } from "@/lib/supabase"
 import { getProviderServices, createService } from "@/lib/services"
@@ -31,6 +40,9 @@ export default function ProviderProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [successModalOpen, setSuccessModalOpen] = useState(false)
+  const [serviceSuccessModalOpen, setServiceSuccessModalOpen] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
 
   const [profileData, setProfileData] = useState({
     organizationName: "",
@@ -207,10 +219,9 @@ export default function ProviderProfilePage() {
         throw error
       }
 
-      toast({
-        title: "Perfil atualizado",
-        description: "Suas informações foram atualizadas com sucesso.",
-      })
+      // Mostrar modal de sucesso em vez de toast
+      setSuccessMessage("Suas informações foram atualizadas com sucesso.")
+      setSuccessModalOpen(true)
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error)
       toast({
@@ -250,6 +261,7 @@ export default function ProviderProfilePage() {
       const { error, service } = await createService(serviceData, slots)
 
       if (error) {
+        console.error("Erro ao criar serviço:", error)
         throw error
       }
 
@@ -268,12 +280,9 @@ export default function ProviderProfilePage() {
         slots: [{ date: "", time: "", duration: "30", cost: "" }],
       })
 
+      // Fechar o diálogo e mostrar modal de sucesso
       setDialogOpen(false)
-
-      toast({
-        title: "Serviço adicionado",
-        description: "O serviço foi adicionado com sucesso.",
-      })
+      setServiceSuccessModalOpen(true)
     } catch (error) {
       console.error("Erro ao adicionar serviço:", error)
       toast({
@@ -299,6 +308,38 @@ export default function ProviderProfilePage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Modal de sucesso para atualização de perfil */}
+      <AlertDialog open={successModalOpen} onOpenChange={setSuccessModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <CheckCircle2 className="h-6 w-6 text-green-500 mr-2" />
+              Perfil Atualizado
+            </AlertDialogTitle>
+            <AlertDialogDescription>{successMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de sucesso para criação de serviço */}
+      <AlertDialog open={serviceSuccessModalOpen} onOpenChange={setServiceSuccessModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <CheckCircle2 className="h-6 w-6 text-green-500 mr-2" />
+              Serviço Adicionado
+            </AlertDialogTitle>
+            <AlertDialogDescription>O serviço foi adicionado com sucesso.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Perfil do Profissional</h1>
         <p className="text-muted-foreground">Complete seu perfil e adicione serviços de atendimento</p>
