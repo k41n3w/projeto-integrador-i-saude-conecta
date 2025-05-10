@@ -66,49 +66,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Buscar perfil do usuário no banco de dados (schema saude_conecta)
+  // Modificar a função fetchUserProfile para buscar apenas no schema saude_conecta
+  // e melhorar o tratamento de erros
+
+  // Substituir a função fetchUserProfile atual por esta:
   const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
-      // Primeiro, tente buscar no schema saude_conecta
-      const { data, error } = await supabaseDb.from("profiles").select("*").eq("id", supabaseUser.id).single()
+      // Buscar apenas no schema saude_conecta, onde as tabelas realmente estão
+      const { data, error } = await supabaseDb.from("profiles").select("*").eq("id", supabaseUser.id)
 
       if (error) {
-        console.error("Erro ao buscar perfil no schema saude_conecta:", error)
-
-        // Se não encontrar, tente buscar no schema public
-        const { data: publicData, error: publicError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", supabaseUser.id)
-          .single()
-
-        if (publicError) {
-          console.error("Erro ao buscar perfil no schema public:", publicError)
-          return
-        }
-
-        if (publicData) {
-          setUser({
-            id: publicData.id,
-            name: publicData.name,
-            email: supabaseUser.email || "",
-            type: publicData.type,
-          })
-        }
-
+        console.error("Erro ao buscar perfil:", error)
         return
       }
 
-      if (data) {
+      // Verificar se encontrou algum perfil
+      if (data && data.length > 0) {
+        const profile = data[0]
         setUser({
-          id: data.id,
-          name: data.name,
+          id: profile.id,
+          name: profile.name,
           email: supabaseUser.email || "",
-          type: data.type,
+          type: profile.type,
         })
+      } else {
+        console.log("Nenhum perfil encontrado para o usuário:", supabaseUser.id)
       }
     } catch (error) {
-      console.error("Erro ao buscar perfil:", error)
+      console.error("Erro inesperado ao buscar perfil:", error)
     }
   }
 
@@ -152,36 +137,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Aguardar um momento para garantir que o usuário foi criado
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Passo 2: Criar o perfil no schema saude_conecta
-      const profileData = {
-        id: data.user.id,
-        name: userData.name || "",
-        type: userData.type || "provider",
-        organization_name: userData.organization_name || "",
-        created_at: new Date().toISOString(),
-      }
+      // Também modificar a função register para inserir apenas no schema saude_conecta
 
-      console.log("Criando perfil com dados:", profileData)
-
+      // Substituir a parte de criação de perfil na função register por esta:
+      // Dentro da função register, substituir o bloco try/catch de criação de perfil por:
       try {
-        // Primeiro, tente inserir no schema saude_conecta
-        const { data: profileData, error: profileError } = await supabaseDb.rpc("create_profile", {
-          p_id: data.user.id,
-          p_name: userData.name || "",
-          p_type: userData.type || "provider",
-          p_organization_name: userData.organization_name || "",
-        })
+        // Inserir diretamente no schema saude_conecta
+        const { error: profileError } = await supabaseDb.from("profiles").insert([
+          {
+            id: data.user.id,
+            name: userData.name || "",
+            type: userData.type || "provider",
+            organization_name: userData.organization_name || "",
+            created_at: new Date().toISOString(),
+          },
+        ])
 
         if (profileError) {
-          console.error("Erro ao criar perfil no schema saude_conecta:", profileError)
-
-          // Se falhar, tente inserir no schema public
-          const { error: publicProfileError } = await supabase.from("profiles").insert([profileData])
-
-          if (publicProfileError) {
-            console.error("Erro ao criar perfil no schema public:", publicProfileError)
-            return { error: publicProfileError }
-          }
+          console.error("Erro ao criar perfil:", profileError)
+          return { error: profileError }
         }
       } catch (insertError) {
         console.error("Erro ao inserir perfil:", insertError)

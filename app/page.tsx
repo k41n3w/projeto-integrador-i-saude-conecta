@@ -121,7 +121,7 @@ export default function Home() {
                 width={400}
                 height={400}
                 alt="Ilustração do processo passo a passo"
-                className="rounded-lg object-cover"
+                className="rounded-lg object-cover max-w-full h-auto"
               />
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function Home() {
                 width={400}
                 height={400}
                 alt="Profissional de saúde usando um tablet"
-                className="rounded-lg object-cover"
+                className="rounded-lg object-cover max-w-full h-auto"
               />
             </div>
             <div className="flex flex-col justify-center space-y-4">

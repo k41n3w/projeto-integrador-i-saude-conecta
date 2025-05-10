@@ -56,7 +56,7 @@ export default function RootLayout({
         <meta property="og:type" content="website" />
         <meta property="og:locale" content="pt_BR" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} overflow-x-hidden`}>
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
             <Navbar />

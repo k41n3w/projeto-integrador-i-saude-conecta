@@ -92,3 +92,21 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Adicione estas regras no final do arquivo */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Garante que tabelas e outros elementos com potencial de overflow sejam responsivos */
+.overflow-auto-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
